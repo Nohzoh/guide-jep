@@ -34,6 +34,7 @@ export function Browse() {
   const [day, setDay] = useState<string | null>(null)
   const [category, setCategory] = useState<number | null>(null)
   const [freeOnly, setFreeOnly] = useState(false)
+  const [reservationOnly, setReservationOnly] = useState(false)
   const [region, setRegion] = useState('')
 
   const [userPos, setUserPos] = useState<LatLng | null>(null)
@@ -58,6 +59,15 @@ export function Browse() {
   }, [])
 
   const freeOptionId = schema?.['conditions-de-participation']?.options.find((o) => o.value === 'gratuit')?.id
+  const reservationOptionId = schema?.['conditions-de-participation']?.options.find(
+    (o) => o.value === 'reservation-obligatoire',
+  )?.id
+  const conditionIds = useMemo(() => {
+    const ids: number[] = []
+    if (freeOnly && freeOptionId) ids.push(freeOptionId)
+    if (reservationOnly && reservationOptionId) ids.push(reservationOptionId)
+    return ids.length > 0 ? ids : undefined
+  }, [freeOnly, freeOptionId, reservationOnly, reservationOptionId])
 
   useEffect(() => {
     let cancelled = false
@@ -68,7 +78,7 @@ export function Browse() {
       search: debouncedSearch || undefined,
       region: debouncedRegion || undefined,
       typesEvenement: category ? [category] : undefined,
-      conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
+      conditions: conditionIds,
       dateFrom: range?.dateFrom,
       dateTo: range?.dateTo,
       geo: geoBounds,
@@ -86,7 +96,7 @@ export function Browse() {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearch, debouncedRegion, day, category, freeOnly, freeOptionId, geoBounds])
+  }, [debouncedSearch, debouncedRegion, day, category, conditionIds, geoBounds])
 
   async function loadMore() {
     const range = day ? dayRange(day) : undefined
@@ -96,7 +106,7 @@ export function Browse() {
         search: debouncedSearch || undefined,
         region: debouncedRegion || undefined,
         typesEvenement: category ? [category] : undefined,
-        conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
+        conditions: conditionIds,
         dateFrom: range?.dateFrom,
         dateTo: range?.dateTo,
         geo: geoBounds,
@@ -120,7 +130,7 @@ export function Browse() {
         search: debouncedSearch || undefined,
         region: debouncedRegion || undefined,
         typesEvenement: category ? [category] : undefined,
-        conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
+        conditions: conditionIds,
         dateFrom: range?.dateFrom,
         dateTo: range?.dateTo,
         geo: bounds,
@@ -220,6 +230,14 @@ export function Browse() {
         <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
           <input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />
           Gratuit uniquement
+        </label>
+        <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+          <input
+            type="checkbox"
+            checked={reservationOnly}
+            onChange={(e) => setReservationOnly(e.target.checked)}
+          />
+          Réservation obligatoire
         </label>
       </div>
 
