@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EventCard } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
-import type { LatLng } from '../lib/geo'
+import type { GeoBounds, LatLng } from '../lib/geo'
 import { bboxForRadius, distanceKm } from '../lib/geo'
 import type { OAEvent, Schema } from '../lib/openagenda'
 import { fetchSchema, searchEvents } from '../lib/openagenda'
@@ -46,6 +46,8 @@ export function Browse() {
   const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fitBoundsKey, setFitBoundsKey] = useState(0)
+  const [searchingArea, setSearchingArea] = useState(false)
 
   const debouncedSearch = useDebounced(search, 400)
   const debouncedRegion = useDebounced(region, 400)
@@ -77,6 +79,7 @@ export function Browse() {
         if (cancelled) return
         setEvents(res.events)
         setTotal(res.total)
+        setFitBoundsKey((k) => k + 1) // fresh filter search: snap the map to the new results
       })
       .catch((e) => !cancelled && setError(e.message))
       .finally(() => !cancelled && setLoading(false))
@@ -103,6 +106,33 @@ export function Browse() {
       setEvents((prev) => [...prev, ...res.events])
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Triggered from the map when the user pans/zooms and asks to search the visible
+  // area — replaces the results without moving the map (unlike a fresh filter search).
+  async function searchArea(bounds: GeoBounds) {
+    const range = day ? dayRange(day) : undefined
+    setSearchingArea(true)
+    setError(null)
+    try {
+      const res = await searchEvents({
+        search: debouncedSearch || undefined,
+        region: debouncedRegion || undefined,
+        typesEvenement: category ? [category] : undefined,
+        conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
+        dateFrom: range?.dateFrom,
+        dateTo: range?.dateTo,
+        geo: bounds,
+        offset: 0,
+        size: 100,
+      })
+      setEvents(res.events)
+      setTotal(res.total)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSearchingArea(false)
     }
   }
 
@@ -249,10 +279,18 @@ export function Browse() {
           {total !== null && displayedEvents.length < total && (
             <p className="text-sm text-amber-600">
               {displayedEvents.length} événement(s) affiché(s) sur la carte, sur {total.toLocaleString('fr-FR')} au
-              total — affine ta recherche ou clique sur « Charger plus » pour en voir davantage.
+              total — déplace la carte et clique sur « Rechercher dans cette zone » pour voir les événements d'un
+              autre endroit.
             </p>
           )}
-          <EventsMap events={displayedEvents} userPos={userPos} radiusKm={userPos ? radiusKm : null} />
+          <EventsMap
+            events={displayedEvents}
+            userPos={userPos}
+            radiusKm={userPos ? radiusKm : null}
+            fitSignal={fitBoundsKey}
+            onSearchArea={searchArea}
+            searchingArea={searchingArea}
+          />
         </>
       ) : (
         <div className="flex flex-col gap-2">
@@ -271,7 +309,7 @@ export function Browse() {
         </div>
       )}
 
-      {events.length > 0 && total !== null && events.length < total && (
+      {viewMode === 'list' && events.length > 0 && total !== null && events.length < total && (
         <button
           onClick={loadMore}
           disabled={loading}
