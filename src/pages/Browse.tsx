@@ -245,7 +245,15 @@ export function Browse() {
       )}
 
       {viewMode === 'map' ? (
-        <EventsMap events={displayedEvents} userPos={userPos} radiusKm={userPos ? radiusKm : null} />
+        <>
+          {total !== null && displayedEvents.length < total && (
+            <p className="text-sm text-amber-600">
+              {displayedEvents.length} événement(s) affiché(s) sur la carte, sur {total.toLocaleString('fr-FR')} au
+              total — affine ta recherche ou clique sur « Charger plus » pour en voir davantage.
+            </p>
+          )}
+          <EventsMap events={displayedEvents} userPos={userPos} radiusKm={userPos ? radiusKm : null} />
+        </>
       ) : (
         <div className="flex flex-col gap-2">
           {displayedEvents.map((ev) => (
@@ -263,7 +271,7 @@ export function Browse() {
         </div>
       )}
 
-      {viewMode === 'list' && events.length > 0 && total !== null && events.length < total && (
+      {events.length > 0 && total !== null && events.length < total && (
         <button
           onClick={loadMore}
           disabled={loading}
