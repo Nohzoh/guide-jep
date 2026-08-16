@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { OAEvent, Schema } from '../lib/openagenda'
 import { fetchEventDetail, fetchSchema, labelsFor } from '../lib/openagenda'
-import { isSlotWithinTimings } from '../lib/schedule'
+import { isSlotWithinTimings, slotsOverlap } from '../lib/schedule'
 import { formatDay, formatTime, fromLocalInputValue, toLocalInputValue } from '../lib/time'
 import { usePlanStore } from '../store/planStore'
 
@@ -10,6 +10,7 @@ export function EventDetail() {
   const { uid } = useParams<{ uid: string }>()
   const navigate = useNavigate()
   const addItem = usePlanStore((s) => s.addItem)
+  const planItems = usePlanStore((s) => s.items)
 
   const [event, setEvent] = useState<OAEvent | null>(null)
   const [schema, setSchema] = useState<Schema | null>(null)
@@ -18,11 +19,13 @@ export function EventDetail() {
   const [end, setEnd] = useState('')
   const [slotError, setSlotError] = useState<string | null>(null)
   const [added, setAdded] = useState(false)
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!uid) return
     setEvent(null)
     setAdded(false)
+    setLastAddedId(null)
     fetchEventDetail(Number(uid))
       .then((ev) => {
         setEvent(ev)
@@ -44,6 +47,11 @@ export function EventDetail() {
   const specificites = labelsFor(schema, 'specificites', event.specificites)
   const conditions = labelsFor(schema, 'conditions-de-participation', event.conditions)
 
+  const currentSlot = start && end ? { start: fromLocalInputValue(start), end: fromLocalInputValue(end) } : null
+  const conflicts = currentSlot
+    ? planItems.filter((i) => i.id !== lastAddedId && slotsOverlap(i.slot, currentSlot))
+    : []
+
   function handleAdd() {
     if (!event) return
     const slotIso = { start: fromLocalInputValue(start), end: fromLocalInputValue(end) }
@@ -54,7 +62,8 @@ export function EventDetail() {
       return
     }
     setSlotError(null)
-    addItem(event, slotIso)
+    const id = addItem(event, slotIso)
+    setLastAddedId(id)
     setAdded(true)
   }
 
@@ -117,7 +126,11 @@ export function EventDetail() {
             <input
               type="datetime-local"
               value={start}
-              onChange={(e) => setStart(e.target.value)}
+              onChange={(e) => {
+                setStart(e.target.value)
+                setAdded(false)
+                setLastAddedId(null)
+              }}
               className="rounded-lg border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
             />
           </label>
@@ -126,7 +139,11 @@ export function EventDetail() {
             <input
               type="datetime-local"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => {
+                setEnd(e.target.value)
+                setAdded(false)
+                setLastAddedId(null)
+              }}
               className="rounded-lg border border-neutral-300 px-2 py-1 dark:border-neutral-700 dark:bg-neutral-900"
             />
           </label>
@@ -138,6 +155,12 @@ export function EventDetail() {
           </button>
         </div>
         {slotError && <p className="mt-2 text-sm text-red-600">{slotError}</p>}
+        {!slotError && conflicts.length > 0 && (
+          <p className="mt-2 text-sm text-amber-600">
+            ⚠️ Ce créneau chevauche {conflicts.length} événement{conflicts.length > 1 ? 's' : ''} déjà dans ton
+            planning : {conflicts.map((c) => c.event.title).join(', ')}
+          </p>
+        )}
         {added && (
           <p className="mt-2 text-sm text-emerald-600">
             Ajouté ! Voir{' '}

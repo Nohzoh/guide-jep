@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { EventsMap } from '../components/EventsMap'
 import { findConflicts } from '../lib/schedule'
 import { dayKey, formatDay, formatTime } from '../lib/time'
 import type { PlanItem } from '../store/planStore'
@@ -22,6 +24,10 @@ export function MyPlanning() {
   const grouped = groupByDay(items)
   const asSlots = items.map((i) => ({ id: i.id, slot: i.slot }))
 
+  const [viewMode, setViewMode] = useState<'timeline' | 'map'>('timeline')
+  const [fitKey, setFitKey] = useState(0)
+  useEffect(() => setFitKey((k) => k + 1), [items])
+
   if (items.length === 0) {
     return (
       <div className="mx-auto max-w-3xl p-4 text-center text-neutral-500">
@@ -35,48 +41,69 @@ export function MyPlanning() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-4">
-      {[...grouped.entries()].map(([day, dayItems]) => (
-        <section key={day}>
-          <h2 className="mb-2 font-medium text-neutral-800 dark:text-neutral-200">
-            {formatDay(dayItems[0].slot.start)}
-          </h2>
-          <ol className="flex flex-col gap-2">
-            {dayItems.map((item) => {
-              const conflicts = findConflicts({ id: item.id, slot: item.slot }, asSlots)
-              return (
-                <li
-                  key={item.id}
-                  className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-neutral-500">
-                        {formatTime(item.slot.start)}–{formatTime(item.slot.end)}
-                      </p>
-                      <Link to={`/event/${item.event.uid}`} className="font-medium text-neutral-900 hover:underline dark:text-neutral-100">
-                        {item.event.title}
-                      </Link>
-                      <p className="text-sm text-neutral-500">{item.event.location.city}</p>
+      <div className="flex justify-end">
+        <div className="flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+          <button
+            onClick={() => setViewMode('timeline')}
+            className={`px-3 py-1 ${viewMode === 'timeline' ? 'bg-violet-600 text-white' : ''}`}
+          >
+            Chronologie
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`px-3 py-1 ${viewMode === 'map' ? 'bg-violet-600 text-white' : ''}`}
+          >
+            Carte
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'map' ? (
+        <EventsMap events={items.map((i) => i.event)} fitSignal={fitKey} />
+      ) : (
+        [...grouped.entries()].map(([day, dayItems]) => (
+          <section key={day}>
+            <h2 className="mb-2 font-medium text-neutral-800 dark:text-neutral-200">
+              {formatDay(dayItems[0].slot.start)}
+            </h2>
+            <ol className="flex flex-col gap-2">
+              {dayItems.map((item) => {
+                const conflicts = findConflicts({ id: item.id, slot: item.slot }, asSlots)
+                return (
+                  <li
+                    key={item.id}
+                    className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-neutral-500">
+                          {formatTime(item.slot.start)}–{formatTime(item.slot.end)}
+                        </p>
+                        <Link to={`/event/${item.event.uid}`} className="font-medium text-neutral-900 hover:underline dark:text-neutral-100">
+                          {item.event.title}
+                        </Link>
+                        <p className="text-sm text-neutral-500">{item.event.location.city}</p>
+                      </div>
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="shrink-0 rounded-lg px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                      >
+                        Retirer
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="shrink-0 rounded-lg px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                    >
-                      Retirer
-                    </button>
-                  </div>
-                  {conflicts.length > 0 && (
-                    <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                      ⚠️ Chevauche {conflicts.length} autre{conflicts.length > 1 ? 's' : ''} créneau
-                      {conflicts.length > 1 ? 'x' : ''} de ton planning
-                    </p>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
-        </section>
-      ))}
+                    {conflicts.length > 0 && (
+                      <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        ⚠️ Chevauche {conflicts.length} autre{conflicts.length > 1 ? 's' : ''} créneau
+                        {conflicts.length > 1 ? 'x' : ''} de ton planning
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
+        ))
+      )}
     </div>
   )
 }

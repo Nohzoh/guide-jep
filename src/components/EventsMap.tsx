@@ -64,19 +64,19 @@ function AreaWatcher({
   onViewChange,
 }: {
   programmaticMove: React.MutableRefObject<boolean>
-  onDirty: () => void
-  onViewChange: (view: MapView) => void
+  onDirty?: () => void
+  onViewChange?: (view: MapView) => void
 }) {
   useMapEvents({
     moveend: (e) => {
       const map = e.target
       const c = map.getCenter()
-      onViewChange({ center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom() })
+      onViewChange?.({ center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom() })
       if (programmaticMove.current) {
         programmaticMove.current = false
         return
       }
-      onDirty()
+      onDirty?.()
     },
   })
   return null
@@ -84,22 +84,22 @@ function AreaWatcher({
 
 export function EventsMap({
   events,
-  userPos,
-  radiusKm,
-  fitSignal,
+  userPos = null,
+  radiusKm = null,
+  fitSignal = 0,
   onSearchArea,
   searchingArea,
-  initialView,
+  initialView = null,
   onViewChange,
 }: {
   events: OAEvent[]
-  userPos: LatLng | null
-  radiusKm: number | null
-  fitSignal: number
-  onSearchArea: (bounds: GeoBounds) => void
+  userPos?: LatLng | null
+  radiusKm?: number | null
+  fitSignal?: number
+  onSearchArea?: (bounds: GeoBounds) => void
   searchingArea?: boolean
-  initialView: MapView | null
-  onViewChange: (view: MapView) => void
+  initialView?: MapView | null
+  onViewChange?: (view: MapView) => void
 }) {
   const programmaticMove = useRef(false)
   const mapRef = useRef<L.Map | null>(null)
@@ -118,7 +118,7 @@ export function EventsMap({
 
   function handleSearchArea() {
     const bounds = mapRef.current?.getBounds()
-    if (!bounds) return
+    if (!bounds || !onSearchArea) return
     const ne = bounds.getNorthEast()
     const sw = bounds.getSouthWest()
     onSearchArea({ northEast: { lat: ne.lat, lng: ne.lng }, southWest: { lat: sw.lat, lng: sw.lng } })
@@ -143,7 +143,11 @@ export function EventsMap({
           skipInitialFit={initialView !== null}
           programmaticMove={programmaticMove}
         />
-        <AreaWatcher programmaticMove={programmaticMove} onDirty={() => setDirty(true)} onViewChange={onViewChange} />
+        <AreaWatcher
+          programmaticMove={programmaticMove}
+          onDirty={onSearchArea ? () => setDirty(true) : undefined}
+          onViewChange={onViewChange}
+        />
         {userPos && (
           <>
             <Marker position={[userPos.lat, userPos.lng]} icon={userIcon}>
@@ -165,7 +169,7 @@ export function EventsMap({
         ))}
       </MapContainer>
 
-      {dirty && (
+      {dirty && onSearchArea && (
         <button
           onClick={handleSearchArea}
           disabled={searchingArea}
