@@ -3,7 +3,15 @@ import type { OAEvent, Schema } from '../lib/openagenda'
 import { labelsFor } from '../lib/openagenda'
 import { formatDay, formatTime } from '../lib/time'
 
-export function EventCard({ event, schema }: { event: OAEvent; schema: Schema | null }) {
+export function EventCard({
+  event,
+  schema,
+  distanceKm,
+}: {
+  event: OAEvent
+  schema: Schema | null
+  distanceKm?: number
+}) {
   const categories = labelsFor(schema, 'types-devenement', event.typesEvenement)
   const sameDay = event.firstTiming?.begin?.slice(0, 10) === event.lastTiming?.end?.slice(0, 10)
 
@@ -21,6 +29,7 @@ export function EventCard({ event, schema }: { event: OAEvent; schema: Schema | 
         <h3 className="truncate font-medium text-neutral-900 dark:text-neutral-100">{event.title}</h3>
         <p className="mt-0.5 truncate text-sm text-neutral-500">
           {event.location.city ?? 'Lieu non précisé'}
+          {distanceKm !== undefined && ` · ${distanceKm.toFixed(1)} km`}
         </p>
         <p className="mt-0.5 text-sm text-neutral-500">
           {event.firstTiming

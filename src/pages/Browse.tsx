@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { EventCard } from '../components/EventCard'
+import { EventsMap } from '../components/EventsMap'
+import type { LatLng } from '../lib/geo'
+import { bboxForRadius, distanceKm } from '../lib/geo'
 import type { OAEvent, Schema } from '../lib/openagenda'
 import { fetchSchema, searchEvents } from '../lib/openagenda'
 
 const PAGE_SIZE = 24
+const RADII_KM = [5, 10, 25, 50, 100]
 
 const DAYS = [
   { key: '2026-09-18', label: 'Ven. 18 (scolaires)' },
@@ -32,6 +36,12 @@ export function Browse() {
   const [freeOnly, setFreeOnly] = useState(false)
   const [region, setRegion] = useState('')
 
+  const [userPos, setUserPos] = useState<LatLng | null>(null)
+  const [radiusKm, setRadiusKm] = useState(25)
+  const [locating, setLocating] = useState(false)
+  const [geoError, setGeoError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
+
   const [events, setEvents] = useState<OAEvent[]>([])
   const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
@@ -39,6 +49,7 @@ export function Browse() {
 
   const debouncedSearch = useDebounced(search, 400)
   const debouncedRegion = useDebounced(region, 400)
+  const geoBounds = useMemo(() => (userPos ? bboxForRadius(userPos, radiusKm) : undefined), [userPos, radiusKm])
 
   useEffect(() => {
     fetchSchema().then(setSchema).catch(() => setSchema(null))
@@ -58,6 +69,7 @@ export function Browse() {
       conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
       dateFrom: range?.dateFrom,
       dateTo: range?.dateTo,
+      geo: geoBounds,
       offset: 0,
       size: PAGE_SIZE,
     })
@@ -71,7 +83,7 @@ export function Browse() {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearch, debouncedRegion, day, category, freeOnly, freeOptionId])
+  }, [debouncedSearch, debouncedRegion, day, category, freeOnly, freeOptionId, geoBounds])
 
   async function loadMore() {
     const range = day ? dayRange(day) : undefined
@@ -84,6 +96,7 @@ export function Browse() {
         conditions: freeOnly && freeOptionId ? [freeOptionId] : undefined,
         dateFrom: range?.dateFrom,
         dateTo: range?.dateTo,
+        geo: geoBounds,
         offset: events.length,
         size: PAGE_SIZE,
       })
@@ -93,7 +106,36 @@ export function Browse() {
     }
   }
 
+  function locate() {
+    if (!navigator.geolocation) {
+      setGeoError('Géolocalisation non disponible sur ce navigateur.')
+      return
+    }
+    setLocating(true)
+    setGeoError(null)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocating(false)
+      },
+      (err) => {
+        setGeoError(`Impossible d'obtenir ta position (${err.message}).`)
+        setLocating(false)
+      },
+      { enableHighAccuracy: false, timeout: 10_000 },
+    )
+  }
+
   const categoryOptions = schema?.['types-devenement']?.options ?? []
+
+  const displayedEvents = useMemo(() => {
+    if (!userPos) return events
+    return [...events].sort(
+      (a, b) =>
+        distanceKm(userPos, { lat: a.location.latitude ?? 0, lng: a.location.longitude ?? 0 }) -
+        distanceKm(userPos, { lat: b.location.latitude ?? 0, lng: b.location.longitude ?? 0 }),
+    )
+  }, [events, userPos])
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
@@ -151,19 +193,77 @@ export function Browse() {
         </label>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        {userPos ? (
+          <>
+            <span className="text-sm text-neutral-600 dark:text-neutral-300">📍 Position définie</span>
+            <select
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              className="rounded-lg border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+            >
+              {RADII_KM.map((r) => (
+                <option key={r} value={r}>
+                  Rayon {r} km
+                </option>
+              ))}
+            </select>
+            <button onClick={() => setUserPos(null)} className="text-sm text-red-600">
+              Effacer
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={locate}
+            disabled={locating}
+            className="rounded-full bg-neutral-100 px-3 py-1 text-sm disabled:opacity-50 dark:bg-neutral-800"
+          >
+            {locating ? 'Localisation…' : '📍 Autour de moi'}
+          </button>
+        )}
+        <div className="ml-auto flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1 ${viewMode === 'list' ? 'bg-violet-600 text-white' : ''}`}
+          >
+            Liste
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`px-3 py-1 ${viewMode === 'map' ? 'bg-violet-600 text-white' : ''}`}
+          >
+            Carte
+          </button>
+        </div>
+      </div>
+
+      {geoError && <p className="text-sm text-red-600">{geoError}</p>}
       {error && <p className="text-sm text-red-600">Erreur de chargement : {error}</p>}
 
       {total !== null && (
         <p className="text-sm text-neutral-500">{total.toLocaleString('fr-FR')} événement(s) trouvé(s)</p>
       )}
 
-      <div className="flex flex-col gap-2">
-        {events.map((ev) => (
-          <EventCard key={ev.uid} event={ev} schema={schema} />
-        ))}
-      </div>
+      {viewMode === 'map' ? (
+        <EventsMap events={displayedEvents} userPos={userPos} radiusKm={userPos ? radiusKm : null} />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {displayedEvents.map((ev) => (
+            <EventCard
+              key={ev.uid}
+              event={ev}
+              schema={schema}
+              distanceKm={
+                userPos && ev.location.latitude && ev.location.longitude
+                  ? distanceKm(userPos, { lat: ev.location.latitude, lng: ev.location.longitude })
+                  : undefined
+              }
+            />
+          ))}
+        </div>
+      )}
 
-      {events.length > 0 && total !== null && events.length < total && (
+      {viewMode === 'list' && events.length > 0 && total !== null && events.length < total && (
         <button
           onClick={loadMore}
           disabled={loading}

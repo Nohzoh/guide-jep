@@ -1,3 +1,5 @@
+import type { GeoBounds } from './geo'
+
 const AGENDA_UID = 2883956
 const API_BASE = `https://api.openagenda.com/v2/agendas/${AGENDA_UID}`
 const API_KEY = import.meta.env.VITE_OPENAGENDA_KEY as string | undefined
@@ -102,6 +104,7 @@ export interface SearchParams {
   conditions?: number[]
   dateFrom?: string // ISO
   dateTo?: string // ISO
+  geo?: GeoBounds
   offset?: number
   size?: number
 }
@@ -126,6 +129,12 @@ export async function searchEvents(params: SearchParams): Promise<SearchResult> 
   for (const id of params.conditions ?? []) usp.append('conditions-de-participation[]', String(id))
   if (params.dateFrom) usp.set('timings[gte]', params.dateFrom)
   if (params.dateTo) usp.set('timings[lte]', params.dateTo)
+  if (params.geo) {
+    usp.set('geo[northEast][lat]', String(params.geo.northEast.lat))
+    usp.set('geo[northEast][lng]', String(params.geo.northEast.lng))
+    usp.set('geo[southWest][lat]', String(params.geo.southWest.lat))
+    usp.set('geo[southWest][lng]', String(params.geo.southWest.lng))
+  }
 
   const res = await fetch(`${API_BASE}/events?${usp.toString()}`)
   if (!res.ok) throw new Error(`OpenAgenda ${res.status}`)
