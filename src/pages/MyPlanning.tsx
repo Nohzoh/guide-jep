@@ -1,0 +1,82 @@
+import { Link } from 'react-router-dom'
+import { findConflicts } from '../lib/schedule'
+import { dayKey, formatDay, formatTime } from '../lib/time'
+import type { PlanItem } from '../store/planStore'
+import { usePlanStore } from '../store/planStore'
+
+function groupByDay(items: PlanItem[]): Map<string, PlanItem[]> {
+  const map = new Map<string, PlanItem[]>()
+  for (const item of items) {
+    const key = dayKey(item.slot.start)
+    const list = map.get(key) ?? []
+    list.push(item)
+    map.set(key, list)
+  }
+  for (const list of map.values()) list.sort((a, b) => a.slot.start.localeCompare(b.slot.start))
+  return new Map([...map.entries()].sort())
+}
+
+export function MyPlanning() {
+  const items = usePlanStore((s) => s.items)
+  const removeItem = usePlanStore((s) => s.removeItem)
+  const grouped = groupByDay(items)
+  const asSlots = items.map((i) => ({ id: i.id, slot: i.slot }))
+
+  if (items.length === 0) {
+    return (
+      <div className="mx-auto max-w-3xl p-4 text-center text-neutral-500">
+        <p>Ton planning est vide pour l'instant.</p>
+        <Link to="/" className="mt-2 inline-block text-violet-600">
+          Parcourir les événements →
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-6 p-4">
+      {[...grouped.entries()].map(([day, dayItems]) => (
+        <section key={day}>
+          <h2 className="mb-2 font-medium text-neutral-800 dark:text-neutral-200">
+            {formatDay(dayItems[0].slot.start)}
+          </h2>
+          <ol className="flex flex-col gap-2">
+            {dayItems.map((item) => {
+              const conflicts = findConflicts({ id: item.id, slot: item.slot }, asSlots)
+              return (
+                <li
+                  key={item.id}
+                  className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-800"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-500">
+                        {formatTime(item.slot.start)}–{formatTime(item.slot.end)}
+                      </p>
+                      <Link to={`/event/${item.event.uid}`} className="font-medium text-neutral-900 hover:underline dark:text-neutral-100">
+                        {item.event.title}
+                      </Link>
+                      <p className="text-sm text-neutral-500">{item.event.location.city}</p>
+                    </div>
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="shrink-0 rounded-lg px-2 py-1 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                  {conflicts.length > 0 && (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      ⚠️ Chevauche {conflicts.length} autre{conflicts.length > 1 ? 's' : ''} créneau
+                      {conflicts.length > 1 ? 'x' : ''} de ton planning
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ))}
+    </div>
+  )
+}
