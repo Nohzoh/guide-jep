@@ -91,7 +91,7 @@ function toEvent(raw: any): OAEvent {
     conditions: asArray(raw['conditions-de-participation']),
     typePublic: asArray(raw['type-de-public']),
     onlineAccessLink: raw.onlineAccessLink ?? null,
-    officialUrl: `https://openagenda.com/agendas/${AGENDA_UID}/events/${raw.slug}`,
+    officialUrl: `https://openagenda.com/agendas/${AGENDA_UID}/events/${raw.uid}`,
   }
 }
 
