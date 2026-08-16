@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { EventCard } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
-import type { GeoBounds, LatLng } from '../lib/geo'
+import type { GeoBounds } from '../lib/geo'
 import { bboxForRadius, distanceKm } from '../lib/geo'
 import type { OAEvent, Schema } from '../lib/openagenda'
 import { fetchSchema, searchEvents } from '../lib/openagenda'
+import { useBrowseStore } from '../store/browseStore'
 
 const PAGE_SIZE = 24
 const RADII_KM = [5, 10, 25, 50, 100]
@@ -30,18 +31,23 @@ function useDebounced<T>(value: T, delayMs: number): T {
 
 export function Browse() {
   const [schema, setSchema] = useState<Schema | null>(null)
-  const [search, setSearch] = useState('')
-  const [day, setDay] = useState<string | null>(null)
-  const [category, setCategory] = useState<number | null>(null)
-  const [freeOnly, setFreeOnly] = useState(false)
-  const [reservationOnly, setReservationOnly] = useState(false)
-  const [region, setRegion] = useState('')
 
-  const [userPos, setUserPos] = useState<LatLng | null>(null)
-  const [radiusKm, setRadiusKm] = useState(25)
+  // Search/filter/map-view state is persisted (localStorage) so it survives
+  // navigating to an event and back, and revisits across sessions.
+  const search = useBrowseStore((s) => s.search)
+  const day = useBrowseStore((s) => s.day)
+  const category = useBrowseStore((s) => s.category)
+  const freeOnly = useBrowseStore((s) => s.freeOnly)
+  const reservationOnly = useBrowseStore((s) => s.reservationOnly)
+  const region = useBrowseStore((s) => s.region)
+  const userPos = useBrowseStore((s) => s.userPos)
+  const radiusKm = useBrowseStore((s) => s.radiusKm)
+  const viewMode = useBrowseStore((s) => s.viewMode)
+  const mapView = useBrowseStore((s) => s.mapView)
+  const setBrowse = useBrowseStore((s) => s.set)
+
   const [locating, setLocating] = useState(false)
   const [geoError, setGeoError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
 
   const [events, setEvents] = useState<OAEvent[]>([])
   const [total, setTotal] = useState<number | null>(null)
@@ -155,7 +161,7 @@ export function Browse() {
     setGeoError(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setBrowse({ userPos: { lat: pos.coords.latitude, lng: pos.coords.longitude } })
         setLocating(false)
       },
       (err) => {
@@ -183,13 +189,13 @@ export function Browse() {
         type="search"
         placeholder="Rechercher un événement (ex : orgue, château, atelier...)"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => setBrowse({ search: e.target.value })}
         className="w-full rounded-lg border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
       />
 
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => setDay(null)}
+          onClick={() => setBrowse({ day: null })}
           className={`rounded-full px-3 py-1 text-sm ${day === null ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
         >
           Tous les jours
@@ -197,7 +203,7 @@ export function Browse() {
         {DAYS.map((d) => (
           <button
             key={d.key}
-            onClick={() => setDay(day === d.key ? null : d.key)}
+            onClick={() => setBrowse({ day: day === d.key ? null : d.key })}
             className={`rounded-full px-3 py-1 text-sm ${day === d.key ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
           >
             {d.label}
@@ -210,7 +216,7 @@ export function Browse() {
           {categoryOptions.map((o) => (
             <button
               key={o.id}
-              onClick={() => setCategory(category === o.id ? null : o.id)}
+              onClick={() => setBrowse({ category: category === o.id ? null : o.id })}
               className={`rounded-full px-3 py-1 text-sm ${category === o.id ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
             >
               {o.label}
@@ -224,18 +230,18 @@ export function Browse() {
           type="text"
           placeholder="Région ou département (ex : Bretagne, Gironde)"
           value={region}
-          onChange={(e) => setRegion(e.target.value)}
+          onChange={(e) => setBrowse({ region: e.target.value })}
           className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
         />
         <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-          <input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />
+          <input type="checkbox" checked={freeOnly} onChange={(e) => setBrowse({ freeOnly: e.target.checked })} />
           Gratuit uniquement
         </label>
         <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
           <input
             type="checkbox"
             checked={reservationOnly}
-            onChange={(e) => setReservationOnly(e.target.checked)}
+            onChange={(e) => setBrowse({ reservationOnly: e.target.checked })}
           />
           Réservation obligatoire
         </label>
@@ -247,7 +253,7 @@ export function Browse() {
             <span className="text-sm text-neutral-600 dark:text-neutral-300">📍 Position définie</span>
             <select
               value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              onChange={(e) => setBrowse({ radiusKm: Number(e.target.value) })}
               className="rounded-lg border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             >
               {RADII_KM.map((r) => (
@@ -256,7 +262,7 @@ export function Browse() {
                 </option>
               ))}
             </select>
-            <button onClick={() => setUserPos(null)} className="text-sm text-red-600">
+            <button onClick={() => setBrowse({ userPos: null })} className="text-sm text-red-600">
               Effacer
             </button>
           </>
@@ -271,13 +277,13 @@ export function Browse() {
         )}
         <div className="ml-auto flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
           <button
-            onClick={() => setViewMode('list')}
+            onClick={() => setBrowse({ viewMode: 'list' })}
             className={`px-3 py-1 ${viewMode === 'list' ? 'bg-violet-600 text-white' : ''}`}
           >
             Liste
           </button>
           <button
-            onClick={() => setViewMode('map')}
+            onClick={() => setBrowse({ viewMode: 'map' })}
             className={`px-3 py-1 ${viewMode === 'map' ? 'bg-violet-600 text-white' : ''}`}
           >
             Carte
@@ -308,6 +314,8 @@ export function Browse() {
             fitSignal={fitBoundsKey}
             onSearchArea={searchArea}
             searchingArea={searchingArea}
+            initialView={mapView}
+            onViewChange={(v) => setBrowse({ mapView: v })}
           />
         </>
       ) : (

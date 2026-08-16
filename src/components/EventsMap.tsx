@@ -5,6 +5,7 @@ import { Circle, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } 
 import { Link } from 'react-router-dom'
 import type { GeoBounds, LatLng } from '../lib/geo'
 import type { OAEvent } from '../lib/openagenda'
+import type { MapView } from '../store/browseStore'
 
 const eventIcon = L.divIcon({
   className: '',
@@ -20,15 +21,32 @@ const userIcon = L.divIcon({
   iconAnchor: [8, 8],
 })
 
-// Fits the map to `points` only when `fitSignal` changes (a fresh filter search),
+// Fits the map to `points` whenever `fitSignal` changes (a fresh filter search),
 // never on pans/zooms or on area-search results — otherwise the map would keep
-// snapping back out to fit every newly loaded pin.
-function FitBounds({ points, fitSignal, programmaticMove }: { points: LatLng[]; fitSignal: number; programmaticMove: React.MutableRefObject<boolean> }) {
+// snapping back out to fit every newly loaded pin. The very first run is skipped
+// when we're restoring a previously saved view, so returning to the map keeps
+// showing the place the user had zoomed into.
+function FitBounds({
+  points,
+  fitSignal,
+  skipInitialFit,
+  programmaticMove,
+}: {
+  points: LatLng[]
+  fitSignal: number
+  skipInitialFit: boolean
+  programmaticMove: React.MutableRefObject<boolean>
+}) {
   const map = useMap()
   const pointsRef = useRef(points)
   pointsRef.current = points
+  const firstRun = useRef(true)
 
   useEffect(() => {
+    const isFirst = firstRun.current
+    firstRun.current = false
+    if (isFirst && skipInitialFit) return
+
     const current = pointsRef.current
     if (current.length === 0) return
     programmaticMove.current = true
@@ -43,12 +61,17 @@ function FitBounds({ points, fitSignal, programmaticMove }: { points: LatLng[]; 
 function AreaWatcher({
   programmaticMove,
   onDirty,
+  onViewChange,
 }: {
   programmaticMove: React.MutableRefObject<boolean>
   onDirty: () => void
+  onViewChange: (view: MapView) => void
 }) {
   useMapEvents({
-    moveend: () => {
+    moveend: (e) => {
+      const map = e.target
+      const c = map.getCenter()
+      onViewChange({ center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom() })
       if (programmaticMove.current) {
         programmaticMove.current = false
         return
@@ -66,6 +89,8 @@ export function EventsMap({
   fitSignal,
   onSearchArea,
   searchingArea,
+  initialView,
+  onViewChange,
 }: {
   events: OAEvent[]
   userPos: LatLng | null
@@ -73,6 +98,8 @@ export function EventsMap({
   fitSignal: number
   onSearchArea: (bounds: GeoBounds) => void
   searchingArea?: boolean
+  initialView: MapView | null
+  onViewChange: (view: MapView) => void
 }) {
   const programmaticMove = useRef(false)
   const mapRef = useRef<L.Map | null>(null)
@@ -86,7 +113,8 @@ export function EventsMap({
   const points: LatLng[] = located.map((e) => ({ lat: e.location.latitude, lng: e.location.longitude }))
   if (userPos) points.push(userPos)
 
-  const center = userPos ?? points[0] ?? { lat: 46.6, lng: 2.2 } // fallback: roughly France
+  const initialCenter = initialView?.center ?? userPos ?? points[0] ?? { lat: 46.6, lng: 2.2 } // fallback: roughly France
+  const initialZoom = initialView?.zoom ?? (userPos ? 12 : 5)
 
   function handleSearchArea() {
     const bounds = mapRef.current?.getBounds()
@@ -101,16 +129,21 @@ export function EventsMap({
     <div className="relative h-[70vh] w-full overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
       <MapContainer
         ref={mapRef}
-        center={[center.lat, center.lng]}
-        zoom={userPos ? 12 : 5}
+        center={[initialCenter.lat, initialCenter.lng]}
+        zoom={initialZoom}
         style={{ height: '100%', width: '100%' }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitBounds points={points} fitSignal={fitSignal} programmaticMove={programmaticMove} />
-        <AreaWatcher programmaticMove={programmaticMove} onDirty={() => setDirty(true)} />
+        <FitBounds
+          points={points}
+          fitSignal={fitSignal}
+          skipInitialFit={initialView !== null}
+          programmaticMove={programmaticMove}
+        />
+        <AreaWatcher programmaticMove={programmaticMove} onDirty={() => setDirty(true)} onViewChange={onViewChange} />
         {userPos && (
           <>
             <Marker position={[userPos.lat, userPos.lng]} icon={userIcon}>
