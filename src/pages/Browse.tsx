@@ -61,6 +61,10 @@ export function Browse() {
   const debouncedRegion = useDebounced(region, 400)
   const geoBounds = useMemo(() => (userPos ? bboxForRadius(userPos, radiusKm) : undefined), [userPos, radiusKm])
   const prevGeoBounds = useRef(geoBounds)
+  // Bounds of whatever the map is currently showing (from the last pan/zoom or
+  // fit) — read at fetch time, not a dependency, so panning alone never
+  // re-triggers a search: only an actual filter change reads it.
+  const mapBoundsRef = useRef<GeoBounds | null>(mapView?.bounds ?? null)
 
   useEffect(() => {
     fetchSchema().then(setSchema).catch(() => setSchema(null))
@@ -82,6 +86,10 @@ export function Browse() {
     setLoading(true)
     setError(null)
     const range = day ? dayRange(day) : undefined
+    // While on the map, keep results scoped to whatever area is currently
+    // visible instead of jumping back to the broader geolocation radius (or
+    // the whole country) every time a filter changes.
+    const areaGeo = viewMode === 'map' ? (mapBoundsRef.current ?? undefined) : undefined
     searchEvents({
       search: debouncedSearch || undefined,
       region: debouncedRegion || undefined,
@@ -89,7 +97,7 @@ export function Browse() {
       conditions: conditionIds,
       dateFrom: range?.dateFrom,
       dateTo: range?.dateTo,
-      geo: geoBounds,
+      geo: areaGeo ?? geoBounds,
       offset: 0,
       size: PAGE_SIZE,
     })
@@ -117,6 +125,7 @@ export function Browse() {
 
   async function loadMore() {
     const range = day ? dayRange(day) : undefined
+    const areaGeo = viewMode === 'map' ? (mapBoundsRef.current ?? undefined) : undefined
     setLoading(true)
     try {
       const res = await searchEvents({
@@ -126,7 +135,7 @@ export function Browse() {
         conditions: conditionIds,
         dateFrom: range?.dateFrom,
         dateTo: range?.dateTo,
-        geo: geoBounds,
+        geo: areaGeo ?? geoBounds,
         offset: events.length,
         size: PAGE_SIZE,
       })
@@ -326,7 +335,10 @@ export function Browse() {
             onSearchArea={searchArea}
             searchingArea={searchingArea}
             initialView={mapView}
-            onViewChange={(v) => setBrowse({ mapView: v })}
+            onViewChange={(v) => {
+              setBrowse({ mapView: v })
+              mapBoundsRef.current = v.bounds ?? null
+            }}
           />
         </>
       ) : (

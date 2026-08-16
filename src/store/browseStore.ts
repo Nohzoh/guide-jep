@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { LatLng } from '../lib/geo'
+import type { GeoBounds, LatLng } from '../lib/geo'
 
 export interface MapView {
   center: LatLng
   zoom: number
+  bounds?: GeoBounds
 }
 
 interface BrowseState {

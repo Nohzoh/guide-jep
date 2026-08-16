@@ -71,7 +71,15 @@ function AreaWatcher({
     moveend: (e) => {
       const map = e.target
       const c = map.getCenter()
-      onViewChange?.({ center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom() })
+      const b = map.getBounds()
+      onViewChange?.({
+        center: { lat: c.lat, lng: c.lng },
+        zoom: map.getZoom(),
+        bounds: {
+          northEast: { lat: b.getNorthEast().lat, lng: b.getNorthEast().lng },
+          southWest: { lat: b.getSouthWest().lat, lng: b.getSouthWest().lng },
+        },
+      })
       if (programmaticMove.current) {
         programmaticMove.current = false
         return
