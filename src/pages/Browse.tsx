@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EventCard } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
 import type { GeoBounds } from '../lib/geo'
@@ -55,10 +55,12 @@ export function Browse() {
   const [error, setError] = useState<string | null>(null)
   const [fitBoundsKey, setFitBoundsKey] = useState(0)
   const [searchingArea, setSearchingArea] = useState(false)
+  const isFirstFetch = useRef(true)
 
   const debouncedSearch = useDebounced(search, 400)
   const debouncedRegion = useDebounced(region, 400)
   const geoBounds = useMemo(() => (userPos ? bboxForRadius(userPos, radiusKm) : undefined), [userPos, radiusKm])
+  const prevGeoBounds = useRef(geoBounds)
 
   useEffect(() => {
     fetchSchema().then(setSchema).catch(() => setSchema(null))
@@ -95,7 +97,16 @@ export function Browse() {
         if (cancelled) return
         setEvents(res.events)
         setTotal(res.total)
-        setFitBoundsKey((k) => k + 1) // fresh filter search: snap the map to the new results
+        // Only snap the map to the new results when the searched location itself
+        // changed (geolocation set/cleared, radius changed) or on first load —
+        // toggling an unrelated filter (day, category, gratuit...) must not move
+        // the map the user is currently looking at.
+        const locationChanged = geoBounds !== prevGeoBounds.current
+        prevGeoBounds.current = geoBounds
+        if (isFirstFetch.current || locationChanged) {
+          setFitBoundsKey((k) => k + 1)
+        }
+        isFirstFetch.current = false
       })
       .catch((e) => !cancelled && setError(e.message))
       .finally(() => !cancelled && setLoading(false))
