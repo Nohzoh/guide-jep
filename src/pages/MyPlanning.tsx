@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { EventsMap } from '../components/EventsMap'
+import { LinkifiedText } from '../components/LinkifiedText'
 import { findConflicts } from '../lib/schedule'
 import { dayKey, formatDay, formatTime } from '../lib/time'
 import type { PlanItem } from '../store/planStore'
@@ -16,6 +17,63 @@ function groupByDay(items: PlanItem[]): Map<string, PlanItem[]> {
   }
   for (const list of map.values()) list.sort((a, b) => a.slot.start.localeCompare(b.slot.start))
   return new Map([...map.entries()].sort())
+}
+
+function NoteEditor({ item }: { item: PlanItem }) {
+  const updateNote = usePlanStore((s) => s.updateNote)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(item.note ?? '')
+
+  function save() {
+    updateNote(item.id, draft.trim())
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-2 flex flex-col gap-1.5">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Ex : réservation ouvre le 5 septembre à 10h — https://..."
+          rows={2}
+          className="rounded-lg border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        />
+        <div className="flex gap-3 text-sm">
+          <button onClick={save} className="text-violet-600">
+            Enregistrer
+          </button>
+          <button
+            onClick={() => {
+              setDraft(item.note ?? '')
+              setEditing(false)
+            }}
+            className="text-neutral-500"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (item.note) {
+    return (
+      <div className="mt-2 rounded-lg bg-amber-50 px-2 py-1.5 dark:bg-amber-950">
+        <LinkifiedText text={item.note} className="whitespace-pre-line text-sm text-amber-800 dark:text-amber-200" />
+        <button onClick={() => setEditing(true)} className="mt-1 text-xs text-violet-600">
+          Modifier la note
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button onClick={() => setEditing(true)} className="mt-2 text-sm text-violet-600">
+      + Ajouter une note (ex : réservation à faire)
+    </button>
+  )
 }
 
 export function MyPlanning() {
@@ -97,6 +155,7 @@ export function MyPlanning() {
                         {conflicts.length > 1 ? 'x' : ''} de ton planning
                       </p>
                     )}
+                    <NoteEditor item={item} />
                   </li>
                 )
               })}
