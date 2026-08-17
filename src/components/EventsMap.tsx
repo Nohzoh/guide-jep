@@ -78,6 +78,37 @@ function FitBounds({
   return null
 }
 
+// Explicitly centers/zooms the map on `bounds` (typically the geolocation
+// radius) whenever `signal` changes — independent from FitBounds, since this
+// should zoom to match the chosen radius rather than to wherever the fetched
+// pins happen to fall.
+function FitToGeoBounds({
+  bounds,
+  signal,
+  programmaticMove,
+}: {
+  bounds: GeoBounds | null
+  signal: number
+  programmaticMove: React.MutableRefObject<boolean>
+}) {
+  const map = useMap()
+  const boundsRef = useRef(bounds)
+  boundsRef.current = bounds
+
+  useEffect(() => {
+    if (signal === 0) return
+    const b = boundsRef.current
+    if (!b) return
+    programmaticMove.current = true
+    map.fitBounds(L.latLngBounds([b.southWest.lat, b.southWest.lng], [b.northEast.lat, b.northEast.lng]), {
+      padding: [32, 32],
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, signal])
+
+  return null
+}
+
 function AreaWatcher({
   programmaticMove,
   onDirty,
@@ -116,6 +147,8 @@ export function EventsMap({
   userPos = null,
   radiusKm = null,
   fitSignal = 0,
+  geoFitBounds = null,
+  geoFitSignal = 0,
   onSearchArea,
   searchingArea,
   initialView = null,
@@ -126,6 +159,8 @@ export function EventsMap({
   userPos?: LatLng | null
   radiusKm?: number | null
   fitSignal?: number
+  geoFitBounds?: GeoBounds | null
+  geoFitSignal?: number
   onSearchArea?: (bounds: GeoBounds) => void
   searchingArea?: boolean
   initialView?: MapView | null
@@ -201,6 +236,7 @@ export function EventsMap({
           onDirty={onSearchArea ? () => setDirty(true) : undefined}
           onViewChange={onViewChange}
         />
+        <FitToGeoBounds bounds={geoFitBounds} signal={geoFitSignal} programmaticMove={programmaticMove} />
         {userPos && (
           <>
             <Marker position={[userPos.lat, userPos.lng]} icon={userIcon}>

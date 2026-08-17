@@ -54,6 +54,7 @@ export function Browse() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fitBoundsKey, setFitBoundsKey] = useState(0)
+  const [geoFitKey, setGeoFitKey] = useState(0)
   const [searchingArea, setSearchingArea] = useState(false)
   const isFirstFetch = useRef(true)
 
@@ -86,10 +87,16 @@ export function Browse() {
     setLoading(true)
     setError(null)
     const range = day ? dayRange(day) : undefined
+    // Did the searched location itself just change (geolocation set/cleared,
+    // radius changed)? Computed against the last *committed* geoBounds, before
+    // that ref is updated below.
+    const locationChanged = geoBounds !== prevGeoBounds.current
     // While on the map, keep results scoped to whatever area is currently
     // visible instead of jumping back to the broader geolocation radius (or
-    // the whole country) every time a filter changes.
-    const areaGeo = viewMode === 'map' ? (mapBoundsRef.current ?? undefined) : undefined
+    // the whole country) every time a filter changes — unless the location/radius
+    // itself just changed, in which case that explicit choice must win over
+    // wherever the map was previously panned to.
+    const areaGeo = viewMode === 'map' && !locationChanged ? (mapBoundsRef.current ?? undefined) : undefined
     searchEvents({
       search: debouncedSearch || undefined,
       region: debouncedRegion || undefined,
@@ -105,14 +112,16 @@ export function Browse() {
         if (cancelled) return
         setEvents(res.events)
         setTotal(res.total)
-        // Only snap the map to the new results when the searched location itself
-        // changed (geolocation set/cleared, radius changed) or on first load —
-        // toggling an unrelated filter (day, category, gratuit...) must not move
-        // the map the user is currently looking at.
-        const locationChanged = geoBounds !== prevGeoBounds.current
         prevGeoBounds.current = geoBounds
-        if (isFirstFetch.current || locationChanged) {
+        // Toggling an unrelated filter (day, category, gratuit...) must not move
+        // the map the user is currently looking at — only the first load and an
+        // actual location/radius change do. A location change zooms precisely to
+        // the new radius; losing the location falls back to fitting the pins.
+        if (isFirstFetch.current) {
           setFitBoundsKey((k) => k + 1)
+        } else if (locationChanged) {
+          if (geoBounds) setGeoFitKey((k) => k + 1)
+          else setFitBoundsKey((k) => k + 1)
         }
         isFirstFetch.current = false
       })
@@ -332,6 +341,8 @@ export function Browse() {
             userPos={userPos}
             radiusKm={userPos ? radiusKm : null}
             fitSignal={fitBoundsKey}
+            geoFitBounds={geoBounds ?? null}
+            geoFitSignal={geoFitKey}
             onSearchArea={searchArea}
             searchingArea={searchingArea}
             initialView={mapView}
