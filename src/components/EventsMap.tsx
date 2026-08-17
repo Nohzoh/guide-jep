@@ -1,10 +1,12 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import type { GeoBounds, LatLng } from '../lib/geo'
 import type { OAEvent } from '../lib/openagenda'
+import type { Slot } from '../lib/schedule'
+import { dayKey } from '../lib/time'
 import type { MapView } from '../store/browseStore'
 
 const eventIcon = L.divIcon({
@@ -20,6 +22,24 @@ const userIcon = L.divIcon({
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 })
+
+// Colors cycle across the plan's distinct days, so each day's route and stop
+// numbers stay visually separate on the map.
+const ROUTE_COLORS = ['#7c3aed', '#059669', '#dc2626', '#0891b2', '#d97706']
+
+function numberedIcon(color: string, n: number) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4);color:white;font-size:11px;font-weight:600;font-family:sans-serif">${n}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  })
+}
+
+interface RouteItem {
+  event: OAEvent
+  slot: Slot
+}
 
 // Fits the map to `points` whenever `fitSignal` changes (a fresh filter search),
 // never on pans/zooms or on area-search results — otherwise the map would keep
@@ -92,6 +112,7 @@ function AreaWatcher({
 
 export function EventsMap({
   events,
+  route,
   userPos = null,
   radiusKm = null,
   fitSignal = 0,
@@ -101,6 +122,7 @@ export function EventsMap({
   onViewChange,
 }: {
   events: OAEvent[]
+  route?: RouteItem[]
   userPos?: LatLng | null
   radiusKm?: number | null
   fitSignal?: number
@@ -117,6 +139,29 @@ export function EventsMap({
     (e): e is OAEvent & { location: { latitude: number; longitude: number } } =>
       typeof e.location.latitude === 'number' && typeof e.location.longitude === 'number',
   )
+
+  const routeDays = useMemo(() => {
+    type LocatedRouteItem = RouteItem & { event: OAEvent & { location: { latitude: number; longitude: number } } }
+    if (!route) return []
+    const located = route.filter(
+      (r): r is LocatedRouteItem =>
+        typeof r.event.location.latitude === 'number' && typeof r.event.location.longitude === 'number',
+    )
+    const groups = new Map<string, LocatedRouteItem[]>()
+    for (const r of located) {
+      const key = dayKey(r.slot.start)
+      const list = groups.get(key) ?? []
+      list.push(r)
+      groups.set(key, list)
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, items], idx) => ({
+        day,
+        color: ROUTE_COLORS[idx % ROUTE_COLORS.length],
+        items: items.slice().sort((a, b) => a.slot.start.localeCompare(b.slot.start)),
+      }))
+  }, [route])
 
   const points: LatLng[] = located.map((e) => ({ lat: e.location.latitude, lng: e.location.longitude }))
   if (userPos) points.push(userPos)
@@ -164,17 +209,45 @@ export function EventsMap({
             {radiusKm && <Circle center={[userPos.lat, userPos.lng]} radius={radiusKm * 1000} pathOptions={{ color: '#2563eb', weight: 1, fillOpacity: 0.05 }} />}
           </>
         )}
-        {located.map((e) => (
-          <Marker key={e.uid} position={[e.location.latitude, e.location.longitude]} icon={eventIcon}>
-            <Popup>
-              <p className="font-medium">{e.title}</p>
-              <p className="text-neutral-500">{e.location.city}</p>
-              <Link to={`/event/${e.uid}`} className="text-violet-600">
-                Voir la fiche →
-              </Link>
-            </Popup>
-          </Marker>
-        ))}
+        {route
+          ? routeDays.map((d) => (
+              <Fragment key={d.day}>
+                {d.items.length >= 2 && (
+                  <Polyline
+                    positions={d.items.map((i) => [i.event.location.latitude, i.event.location.longitude])}
+                    pathOptions={{ color: d.color, weight: 3, dashArray: '6 8', opacity: 0.8 }}
+                  />
+                )}
+                {d.items.map((i, idx) => (
+                  <Marker
+                    key={`${i.event.uid}-${i.slot.start}`}
+                    position={[i.event.location.latitude, i.event.location.longitude]}
+                    icon={numberedIcon(d.color, idx + 1)}
+                  >
+                    <Popup>
+                      <p className="font-medium">
+                        {idx + 1}. {i.event.title}
+                      </p>
+                      <p className="text-neutral-500">{i.event.location.city}</p>
+                      <Link to={`/event/${i.event.uid}`} className="text-violet-600">
+                        Voir la fiche →
+                      </Link>
+                    </Popup>
+                  </Marker>
+                ))}
+              </Fragment>
+            ))
+          : located.map((e) => (
+              <Marker key={e.uid} position={[e.location.latitude, e.location.longitude]} icon={eventIcon}>
+                <Popup>
+                  <p className="font-medium">{e.title}</p>
+                  <p className="text-neutral-500">{e.location.city}</p>
+                  <Link to={`/event/${e.uid}`} className="text-violet-600">
+                    Voir la fiche →
+                  </Link>
+                </Popup>
+              </Marker>
+            ))}
       </MapContainer>
 
       {dirty && onSearchArea && (

@@ -159,7 +159,11 @@ export function MyPlanning() {
       </div>
 
       {viewMode === 'map' ? (
-        <EventsMap events={items.map((i) => i.event)} fitSignal={fitKey} />
+        <EventsMap
+          events={items.map((i) => i.event)}
+          route={items.map((i) => ({ event: i.event, slot: i.slot }))}
+          fitSignal={fitKey}
+        />
       ) : (
         [...grouped.entries()].map(([day, dayItems]) => (
           <section key={day}>
