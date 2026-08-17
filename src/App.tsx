@@ -1,4 +1,5 @@
 import { HashRouter, Route, Routes } from 'react-router-dom'
+import { Footer } from './components/Footer'
 import { Nav } from './components/Nav'
 import { Browse } from './pages/Browse'
 import { EventDetail } from './pages/EventDetail'
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/planning" element={<MyPlanning />} />
         </Routes>
       </main>
+      <Footer />
     </HashRouter>
   )
 }
