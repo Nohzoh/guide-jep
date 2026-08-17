@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { EventsMap } from '../components/EventsMap'
 import { LinkifiedText } from '../components/LinkifiedText'
 import { findConflicts } from '../lib/schedule'
+import { buildShareUrl } from '../lib/share'
 import { dayKey, formatDay, formatTime } from '../lib/time'
 import type { PlanItem } from '../store/planStore'
 import { usePlanStore } from '../store/planStore'
@@ -76,6 +77,46 @@ function NoteEditor({ item }: { item: PlanItem }) {
   )
 }
 
+function ShareButton({ items }: { items: PlanItem[] }) {
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  async function share() {
+    const url = buildShareUrl(items)
+    setShareUrl(url)
+    setCopied(false)
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      // Clipboard API unavailable (permissions/non-secure context) — the visible
+      // link below lets the user copy it by hand instead.
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        onClick={share}
+        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+      >
+        🔗 Partager mon planning
+      </button>
+      {shareUrl && (
+        <div className="flex items-center gap-2">
+          <input
+            readOnly
+            value={shareUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-56 rounded-lg border border-neutral-300 px-2 py-1 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+          />
+          <span className="text-xs text-neutral-500">{copied ? '✓ copié' : 'sélectionne pour copier'}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function MyPlanning() {
   const items = usePlanStore((s) => s.items)
   const removeItem = usePlanStore((s) => s.removeItem)
@@ -99,7 +140,8 @@ export function MyPlanning() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <ShareButton items={items} />
         <div className="flex overflow-hidden rounded-lg border border-neutral-300 text-sm dark:border-neutral-700">
           <button
             onClick={() => setViewMode('timeline')}
