@@ -18,7 +18,6 @@ export function EventDetail() {
   const [error, setError] = useState<string | null>(null)
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
-  const [slotError, setSlotError] = useState<string | null>(null)
   const [added, setAdded] = useState(false)
   const [addedWasEdit, setAddedWasEdit] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
@@ -56,6 +55,10 @@ export function EventDetail() {
   const existingItem = event ? planItems.find((i) => i.event.uid === event.uid) : undefined
 
   const currentSlot = start && end ? { start: fromLocalInputValue(start), end: fromLocalInputValue(end) } : null
+  const slotError =
+    currentSlot && !isSlotWithinTimings(currentSlot, event.timings)
+      ? "Ce créneau ne correspond à aucune plage d'ouverture réelle de l'événement — ajuste les horaires."
+      : null
   const conflicts = currentSlot
     ? planItems.filter(
         (i) => i.id !== lastAddedId && i.id !== existingItem?.id && slotsOverlap(i.slot, currentSlot),
@@ -63,15 +66,8 @@ export function EventDetail() {
     : []
 
   function handleAdd() {
-    if (!event) return
-    const slotIso = { start: fromLocalInputValue(start), end: fromLocalInputValue(end) }
-    if (!isSlotWithinTimings(slotIso, event.timings)) {
-      setSlotError(
-        "Ce créneau ne correspond à aucune plage d'ouverture réelle de l'événement — ajuste les horaires.",
-      )
-      return
-    }
-    setSlotError(null)
+    if (!event || !currentSlot || slotError) return
+    const slotIso = currentSlot
     if (existingItem) {
       updateSlot(existingItem.id, slotIso)
       setLastAddedId(existingItem.id)
@@ -174,7 +170,8 @@ export function EventDetail() {
           </label>
           <button
             onClick={handleAdd}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+            disabled={!!slotError}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
           >
             {existingItem ? 'Modifier mon planning' : 'Ajouter à mon planning'}
           </button>
