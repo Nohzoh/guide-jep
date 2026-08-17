@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { LinkifiedText } from '../components/LinkifiedText'
 import type { OAEvent, Schema } from '../lib/openagenda'
 import { fetchEventDetail, fetchSchema, labelsFor } from '../lib/openagenda'
 import { isSlotWithinTimings, slotsOverlap } from '../lib/schedule'
@@ -119,9 +120,10 @@ export function EventDetail() {
         </ul>
       </div>
 
-      <p className="whitespace-pre-line text-sm text-neutral-700 dark:text-neutral-300">
-        {event.longDescription ?? event.description}
-      </p>
+      <LinkifiedText
+        text={event.longDescription ?? event.description}
+        className="whitespace-pre-line text-sm text-neutral-700 dark:text-neutral-300"
+      />
 
       {event.officialUrl && (
         <a href={event.officialUrl} target="_blank" rel="noreferrer" className="text-sm text-violet-600">
