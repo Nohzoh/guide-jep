@@ -10,6 +10,7 @@ export function EventDetail() {
   const { uid } = useParams<{ uid: string }>()
   const navigate = useNavigate()
   const addItem = usePlanStore((s) => s.addItem)
+  const updateSlot = usePlanStore((s) => s.updateSlot)
   const planItems = usePlanStore((s) => s.items)
 
   const [event, setEvent] = useState<OAEvent | null>(null)
@@ -19,6 +20,7 @@ export function EventDetail() {
   const [end, setEnd] = useState('')
   const [slotError, setSlotError] = useState<string | null>(null)
   const [added, setAdded] = useState(false)
+  const [addedWasEdit, setAddedWasEdit] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -29,7 +31,11 @@ export function EventDetail() {
     fetchEventDetail(Number(uid))
       .then((ev) => {
         setEvent(ev)
-        if (ev.firstTiming) {
+        const existing = usePlanStore.getState().items.find((i) => i.event.uid === ev.uid)
+        if (existing) {
+          setStart(toLocalInputValue(existing.slot.start))
+          setEnd(toLocalInputValue(existing.slot.end))
+        } else if (ev.firstTiming) {
           setStart(toLocalInputValue(ev.firstTiming.begin))
           const oneHourLater = new Date(new Date(ev.firstTiming.begin).getTime() + 60 * 60 * 1000)
           const cappedEnd = Math.min(oneHourLater.getTime(), new Date(ev.firstTiming.end).getTime())
@@ -47,9 +53,13 @@ export function EventDetail() {
   const specificites = labelsFor(schema, 'specificites', event.specificites)
   const conditions = labelsFor(schema, 'conditions-de-participation', event.conditions)
 
+  const existingItem = event ? planItems.find((i) => i.event.uid === event.uid) : undefined
+
   const currentSlot = start && end ? { start: fromLocalInputValue(start), end: fromLocalInputValue(end) } : null
   const conflicts = currentSlot
-    ? planItems.filter((i) => i.id !== lastAddedId && slotsOverlap(i.slot, currentSlot))
+    ? planItems.filter(
+        (i) => i.id !== lastAddedId && i.id !== existingItem?.id && slotsOverlap(i.slot, currentSlot),
+      )
     : []
 
   function handleAdd() {
@@ -62,8 +72,15 @@ export function EventDetail() {
       return
     }
     setSlotError(null)
-    const id = addItem(event, slotIso)
-    setLastAddedId(id)
+    if (existingItem) {
+      updateSlot(existingItem.id, slotIso)
+      setLastAddedId(existingItem.id)
+      setAddedWasEdit(true)
+    } else {
+      const id = addItem(event, slotIso)
+      setLastAddedId(id)
+      setAddedWasEdit(false)
+    }
     setAdded(true)
   }
 
@@ -159,7 +176,7 @@ export function EventDetail() {
             onClick={handleAdd}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
           >
-            Ajouter à mon planning
+            {existingItem ? 'Modifier mon planning' : 'Ajouter à mon planning'}
           </button>
         </div>
         {slotError && <p className="mt-2 text-sm text-red-600">{slotError}</p>}
@@ -171,7 +188,7 @@ export function EventDetail() {
         )}
         {added && (
           <p className="mt-2 text-sm text-emerald-600">
-            Ajouté ! Voir{' '}
+            {addedWasEdit ? 'Planning modifié !' : 'Ajouté !'} Voir{' '}
             <button onClick={() => navigate('/planning')} className="underline">
               mon planning
             </button>
