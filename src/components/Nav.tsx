@@ -17,7 +17,7 @@ export function Nav() {
         <Link className="font-semibold text-neutral-900 dark:text-neutral-100" to="/">
           🏛️ JEP Planner
         </Link>
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-2">
           <NavLink to="/" end className={linkClass}>
             Recherche
           </NavLink>
@@ -30,7 +30,7 @@ export function Nav() {
             rel="noopener noreferrer"
             title="Soutenir le projet sur Ko-fi"
             aria-label="Soutenir le projet sur Ko-fi"
-            className="px-2 py-2 text-lg opacity-70 transition hover:opacity-100"
+            className="ml-1 border-l border-neutral-200 py-2 pl-3 pr-1 text-lg opacity-70 transition hover:opacity-100 dark:border-neutral-800"
           >
             ☕
           </a>
