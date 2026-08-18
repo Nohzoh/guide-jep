@@ -10,7 +10,7 @@ export interface MapView {
 
 interface BrowseState {
   search: string
-  day: string | null
+  days: string[]
   category: number | null
   freeOnly: boolean
   reservationOnly: boolean
@@ -26,7 +26,7 @@ export const useBrowseStore = create<BrowseState>()(
   persist(
     (set) => ({
       search: '',
-      day: null,
+      days: [],
       category: null,
       freeOnly: false,
       reservationOnly: false,

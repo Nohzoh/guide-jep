@@ -16,8 +16,13 @@ const DAYS = [
   { key: '2026-09-20', label: 'Dim. 20' },
 ]
 
-function dayRange(day: string): { dateFrom: string; dateTo: string } {
-  return { dateFrom: `${day}T00:00:00+02:00`, dateTo: `${day}T23:59:00+02:00` }
+// Spans from the earliest to the latest selected day. With only 3 possible
+// days, the sole edge case is picking Ven+Dim while skipping Sam — that ends
+// up also including Sam's events, which is an acceptable simplification.
+function daysRange(selected: string[]): { dateFrom: string; dateTo: string } | undefined {
+  if (selected.length === 0) return undefined
+  const sorted = [...selected].sort()
+  return { dateFrom: `${sorted[0]}T00:00:00+02:00`, dateTo: `${sorted[sorted.length - 1]}T23:59:00+02:00` }
 }
 
 function useDebounced<T>(value: T, delayMs: number): T {
@@ -35,7 +40,7 @@ export function Browse() {
   // Search/filter/map-view state is persisted (localStorage) so it survives
   // navigating to an event and back, and revisits across sessions.
   const search = useBrowseStore((s) => s.search)
-  const day = useBrowseStore((s) => s.day)
+  const days = useBrowseStore((s) => s.days)
   const category = useBrowseStore((s) => s.category)
   const freeOnly = useBrowseStore((s) => s.freeOnly)
   const reservationOnly = useBrowseStore((s) => s.reservationOnly)
@@ -86,7 +91,7 @@ export function Browse() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    const range = day ? dayRange(day) : undefined
+    const range = daysRange(days)
     // Did the searched location itself just change (geolocation set/cleared,
     // radius changed)? Computed against the last *committed* geoBounds, before
     // that ref is updated below.
@@ -130,10 +135,10 @@ export function Browse() {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearch, debouncedRegion, day, category, conditionIds, geoBounds])
+  }, [debouncedSearch, debouncedRegion, days, category, conditionIds, geoBounds])
 
   async function loadMore() {
-    const range = day ? dayRange(day) : undefined
+    const range = daysRange(days)
     const areaGeo = viewMode === 'map' ? (mapBoundsRef.current ?? undefined) : undefined
     setLoading(true)
     try {
@@ -157,7 +162,7 @@ export function Browse() {
   // Triggered from the map when the user pans/zooms and asks to search the visible
   // area — replaces the results without moving the map (unlike a fresh filter search).
   async function searchArea(bounds: GeoBounds) {
-    const range = day ? dayRange(day) : undefined
+    const range = daysRange(days)
     setSearchingArea(true)
     setError(null)
     try {
@@ -224,16 +229,20 @@ export function Browse() {
 
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => setBrowse({ day: null })}
-          className={`rounded-full px-3 py-1 text-sm ${day === null ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+          onClick={() => setBrowse({ days: [] })}
+          className={`rounded-full px-3 py-1 text-sm ${days.length === 0 ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
         >
           Tous les jours
         </button>
         {DAYS.map((d) => (
           <button
             key={d.key}
-            onClick={() => setBrowse({ day: day === d.key ? null : d.key })}
-            className={`rounded-full px-3 py-1 text-sm ${day === d.key ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
+            onClick={() =>
+              setBrowse({
+                days: days.includes(d.key) ? days.filter((k) => k !== d.key) : [...days, d.key],
+              })
+            }
+            className={`rounded-full px-3 py-1 text-sm ${days.includes(d.key) ? 'bg-violet-600 text-white' : 'bg-neutral-100 dark:bg-neutral-800'}`}
           >
             {d.label}
           </button>
