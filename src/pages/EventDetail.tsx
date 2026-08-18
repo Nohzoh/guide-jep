@@ -137,14 +137,14 @@ export function EventDetail() {
         </h2>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col text-sm">
-            Arrivée
+            De
             <input
               type="datetime-local"
               value={start}
               onChange={(e) => {
                 const newStart = e.target.value
-                // Keep the visit's duration constant when the arrival time moves,
-                // so the departure time doesn't need a separate manual edit.
+                // Keep the visit's duration constant when the start time moves,
+                // so the end time doesn't need a separate manual edit.
                 if (start && end && newStart) {
                   const delta = new Date(fromLocalInputValue(newStart)).getTime() - new Date(fromLocalInputValue(start)).getTime()
                   const newEnd = new Date(new Date(fromLocalInputValue(end)).getTime() + delta)
@@ -158,7 +158,7 @@ export function EventDetail() {
             />
           </label>
           <label className="flex flex-col text-sm">
-            Départ
+            À
             <input
               type="datetime-local"
               value={end}
